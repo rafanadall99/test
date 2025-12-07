@@ -72,27 +72,58 @@ def setup_webmin_repo(errors):
     """
     run(["apt-get", "update"], errors, "apt-get update (pre-requisitos)")
     run(
-        ["apt-get", "install", "-y", "wget", "apt-transport-https",
-         "software-properties-common", "gnupg"],
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "wget",
+            "curl",
+            "ca-certificates",
+            "apt-transport-https",
+            "software-properties-common",
+            "gnupg",
+        ],
         errors,
         "Instalando dependencias para Webmin",
     )
 
-    # Clave GPG -> keyring
-    run(
-        [
-            "bash",
-            "-lc",
-            "wget -qO- http://www.webmin.com/jcameron-key.asc "
-            "| tee /usr/share/keyrings/webmin-key.asc > /dev/null",
-        ],
-        errors,
-        "Descargando clave GPG de Webmin",
-    )
+    def fetch_keyring():
+        # Intenta primero por HTTPS y, si falla, recurre a HTTP (algunos
+        # servidores Ubuntu mínimos carecen de certificados actualizados).
+        urls = [
+            "https://download.webmin.com/jcameron-key.asc",
+            "http://www.webmin.com/jcameron-key.asc",
+        ]
+        last_error = None
+        initial_error_count = len(errors)
+        for url in urls:
+            try:
+                run(
+                    [
+                        "bash",
+                        "-lc",
+                        f"curl -fsSL {url} | gpg --dearmor | tee /usr/share/keyrings/webmin.gpg > /dev/null",
+                    ],
+                    errors,
+                    f"Descargando y registrando clave GPG de Webmin ({url})",
+                )
+                # Limpia cualquier error previo que proviniera de un intento fallido.
+                del errors[initial_error_count:]
+                return
+            except RuntimeError as exc:  # pragma: no cover - controlado por flujo normal
+                last_error = exc
+
+        # Si llegamos aquí es que todos los intentos fallaron; conservamos solo el último.
+        del errors[initial_error_count:]
+        if last_error:
+            errors.append(str(last_error))
+            raise last_error
+
+    fetch_keyring()
 
     sources_path = "/etc/apt/sources.list.d/webmin.list"
     content = (
-        "deb [signed-by=/usr/share/keyrings/webmin-key.asc] "
+        "deb [signed-by=/usr/share/keyrings/webmin.gpg] "
         "http://download.webmin.com/download/repository sarge contrib\n"
     )
 
