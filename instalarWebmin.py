@@ -1,21 +1,8 @@
 #!/usr/bin/env python3
 """
 instalarWebmin.py
-Instala Webmin (puerto 10000) y BIND9 en Ubuntu/Debian
+Instala Webmin (puerto 10000) en Ubuntu/Debian
 usando el repositorio oficial de Webmin.
-
-Salida:
-  - Si todo va bien:
-      --------------------------------------------------
-      WEBMIN + BIND INSTALADOS
-      --------------------------------------------------
-  - Si algo falla:
-      --------------------------------------------------
-      WEBMIN + BIND NO INSTALADOS
-
-      - Errores:
-        - ...
-      --------------------------------------------------
 """
 
 import os
@@ -25,10 +12,7 @@ import shutil
 
 
 def run(cmd, errors, description=""):
-    """
-    Ejecuta un comando sin mostrar nada por pantalla.
-    Si falla, guarda el error en 'errors' y lanza excepción.
-    """
+    """Ejecuta un comando silencioso. Si falla, guarda error y lanza excepción."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         msg_desc = description or "Error ejecutando comando"
@@ -94,7 +78,7 @@ def setup_webmin_repo(errors):
             raise
 
     # 2) Actualiza índices una vez limpio de repos antiguos de Webmin
-    run(["apt-get", "update"], errors, "apt-get update (pre-requisitos)")
+    run(["apt-get", "update"], errors, "apt-get update (pre-requisitos Webmin)")
 
     # 3) Dependencias necesarias para descargar y ejecutar el script oficial
     run(
@@ -114,7 +98,6 @@ def setup_webmin_repo(errors):
     )
 
     # 4) Descarga y ejecuta el script oficial webmin-setup-repo.sh
-    #    --force = no pregunta "Setup Webmin releases repository? (y/N)"
     run(
         [
             "bash",
@@ -132,10 +115,9 @@ def setup_webmin_repo(errors):
     )
 
 
-def install_webmin_and_bind(errors):
+def instalar_webmin(errors):
     setup_webmin_repo(errors)
 
-    # Webmin + BIND9 (para módulo BIND DNS Server)
     run(
         [
             "apt-get",
@@ -143,11 +125,9 @@ def install_webmin_and_bind(errors):
             "-y",
             "--install-recommends",
             "webmin",
-            "bind9",
-            "bind9utils",
         ],
         errors,
-        "Instalando Webmin y BIND9",
+        "Instalando Webmin",
     )
 
     if shutil.which("systemctl") is not None:
@@ -156,22 +136,17 @@ def install_webmin_and_bind(errors):
             errors,
             "Habilitando y arrancando servicio webmin",
         )
-        run(
-            ["systemctl", "enable", "--now", "bind9"],
-            errors,
-            "Habilitando y arrancando servicio bind9",
-        )
 
 
 def print_success_banner():
     print("--------------------------------------------------")
-    print("WEBMIN + BIND INSTALADOS")
+    print("WEBMIN INSTALADO")
     print("--------------------------------------------------")
 
 
 def print_error_banner(errors, exception_msg):
     print("--------------------------------------------------")
-    print("WEBMIN + BIND NO INSTALADOS")
+    print("WEBMIN NO INSTALADO")
     print()
     print("- Errores:")
     if errors:
@@ -189,7 +164,7 @@ def main():
     try:
         check_root()
         check_distro()
-        install_webmin_and_bind(errors)
+        instalar_webmin(errors)
         print_success_banner()
         sys.exit(0)
     except Exception as e:
