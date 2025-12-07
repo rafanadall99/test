@@ -83,7 +83,7 @@ def setup_webmin_repo(errors):
         [
             "bash",
             "-lc",
-            "wget -qO- http://www.webmin.com/jcameron-key.asc "
+            "curl -fsSL https://download.webmin.com/jcameron-key.asc "
             "| tee /usr/share/keyrings/webmin-key.asc > /dev/null",
         ],
         errors,
@@ -93,7 +93,7 @@ def setup_webmin_repo(errors):
     sources_path = "/etc/apt/sources.list.d/webmin.list"
     content = (
         "deb [signed-by=/usr/share/keyrings/webmin-key.asc] "
-        "http://download.webmin.com/download/repository sarge contrib\n"
+        "https://download.webmin.com/download/repository sarge contrib\n"
     )
 
     with open(sources_path, "w") as f:
