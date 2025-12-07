@@ -68,38 +68,82 @@ def check_distro():
 def setup_webmin_repo(errors):
     """
     Configura el repo oficial de Webmin y su clave GPG
-    usando keyring en /usr/share/keyrings/webmin-key.asc
+    usando keyring en /usr/share/keyrings/webmin.gpg
     """
+    # Actualiza índices antes de instalar dependencias
     run(["apt-get", "update"], errors, "apt-get update (pre-requisitos)")
+
+    # Dependencias necesarias para descargar la clave y usar el repo
     run(
-        ["apt-get", "install", "-y", "wget", "apt-transport-https",
-         "software-properties-common", "gnupg"],
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "wget",
+            "curl",
+            "ca-certificates",
+            "apt-transport-https",
+            "software-properties-common",
+            "gnupg",
+        ],
         errors,
         "Instalando dependencias para Webmin",
     )
 
-    # Clave GPG -> keyring (formato .gpg, recomendado por Webmin)
-    run(
-        [
-            "bash",
-            "-lc",
-            "curl -fsSL https://download.webmin.com/jcameron-key.asc "
-            "| gpg --dearmor "
-            "| tee /usr/share/keyrings/webmin.gpg > /dev/null",
-        ],
-        errors,
-        "Descargando y registrando clave GPG de Webmin",
-    )
+    def fetch_keyring():
+        """
+        Descarga la clave GPG de Webmin y la guarda en formato .gpg.
+        Intenta primero por HTTPS y, si falla (por temas de TLS/certificados),
+        reintenta por HTTP.
+        """
+        urls = [
+            "https://download.webmin.com/jcameron-key.asc",
+            "http://www.webmin.com/jcameron-key.asc",
+        ]
+        last_error = None
+        initial_error_count = len(errors)
 
+        for url in urls:
+            try:
+                run(
+                    [
+                        "bash",
+                        "-lc",
+                        (
+                            f"curl -fsSL {url} | gpg --dearmor "
+                            "| tee /usr/share/keyrings/webmin.gpg > /dev/null"
+                        ),
+                    ],
+                    errors,
+                    f"Descargando y registrando clave GPG de Webmin ({url})",
+                )
+                # Si uno de los intentos ha ido bien, limpiamos los errores
+                # que pudieran haberse añadido en intentos anteriores.
+                del errors[initial_error_count:]
+                return
+            except RuntimeError as exc:
+                last_error = exc
+
+        # Si llegamos aquí, todos los intentos han fallado.
+        del errors[initial_error_count:]
+        if last_error:
+            errors.append(str(last_error))
+            raise last_error
+
+    # Descarga/registro de la clave GPG
+    fetch_keyring()
+
+    # Archivo de lista de repos de Webmin
     sources_path = "/etc/apt/sources.list.d/webmin.list"
     content = (
         "deb [signed-by=/usr/share/keyrings/webmin.gpg] "
-        "https://download.webmin.com/download/repository sarge contrib\n"
+        "http://download.webmin.com/download/repository sarge contrib\n"
     )
 
     with open(sources_path, "w") as f:
         f.write(content)
 
+    # Actualiza índices ya con el repo de Webmin activo
     run(["apt-get", "update"], errors, "apt-get update (repo Webmin)")
 
 
@@ -108,7 +152,15 @@ def install_webmin_and_bind(errors):
 
     # Webmin + BIND9 (para módulo BIND DNS Server)
     run(
-        ["apt-get", "install", "-y", "--install-recommends", "webmin", "bind9", "bind9utils"],
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "--install-recommends",
+            "webmin",
+            "bind9",
+            "bind9utils",
+        ],
         errors,
         "Instalando Webmin y BIND9",
     )
