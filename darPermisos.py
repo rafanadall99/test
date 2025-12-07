@@ -4,7 +4,7 @@ import stat
 
 # Lista de scripts a los que quieres dar permiso de ejecución
 SCRIPTS = [
-    "configurarBIND_DNS_Server.py",
+    "instalarBIND_DNS_Server.py",
     "instalarDockerCompose.py",
     "instalarWebmin.py",
     "scriptSemilla.py",
