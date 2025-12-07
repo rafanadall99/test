@@ -78,22 +78,23 @@ def setup_webmin_repo(errors):
         "Instalando dependencias para Webmin",
     )
 
-    # Clave GPG -> keyring
+    # Clave GPG -> keyring (formato .gpg, recomendado por Webmin)
     run(
         [
             "bash",
             "-lc",
-            "wget -qO- http://www.webmin.com/jcameron-key.asc "
-            "| tee /usr/share/keyrings/webmin-key.asc > /dev/null",
+            "curl -fsSL https://download.webmin.com/jcameron-key.asc "
+            "| gpg --dearmor "
+            "| tee /usr/share/keyrings/webmin.gpg > /dev/null",
         ],
         errors,
-        "Descargando clave GPG de Webmin",
+        "Descargando y registrando clave GPG de Webmin",
     )
 
     sources_path = "/etc/apt/sources.list.d/webmin.list"
     content = (
-        "deb [signed-by=/usr/share/keyrings/webmin-key.asc] "
-        "http://download.webmin.com/download/repository sarge contrib\n"
+        "deb [signed-by=/usr/share/keyrings/webmin.gpg] "
+        "https://download.webmin.com/download/repository sarge contrib\n"
     )
 
     with open(sources_path, "w") as f:
