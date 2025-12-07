@@ -9,9 +9,10 @@ Salida por terminal:
 """
 
 import os
+import shutil
 import subprocess
 import sys
-import shutil
+import tempfile
 
 
 def run(cmd, errors, description=""):
@@ -72,10 +73,39 @@ def get_ubuntu_codename() -> str:
     return codename
 
 
+def run_scoped_apt_update(errors, description, extra_source_files=None):
+    """Ejecuta apt-get update sólo con sources.list y las fuentes indicadas.
+
+    Esto evita que otros repositorios con firmas inválidas (por ejemplo, Webmin)
+    provoquen un fallo general al preparar Docker.
+    """
+
+    extra_source_files = extra_source_files or []
+    with tempfile.TemporaryDirectory() as tmp_sources:
+        for source_file in extra_source_files:
+            if os.path.exists(source_file):
+                shutil.copy2(source_file, os.path.join(tmp_sources, os.path.basename(source_file)))
+
+        run(
+            [
+                "apt-get",
+                "update",
+                "-o",
+                f"Dir::Etc::sourcelist=/etc/apt/sources.list",
+                "-o",
+                f"Dir::Etc::sourceparts={tmp_sources}",
+                "-o",
+                "APT::Get::List-Cleanup=false",
+            ],
+            errors,
+            description,
+        )
+
+
 def setup_docker_repo(errors):
     """Configura el repositorio oficial de Docker para Ubuntu."""
     # Paquetes necesarios
-    run(["apt-get", "update"], errors, "apt-get update (pre-requisitos)")
+    run_scoped_apt_update(errors, "apt-get update (pre-requisitos)")
     run(
         ["apt-get", "install", "-y", "ca-certificates", "curl", "gnupg"],
         errors,
@@ -111,7 +141,7 @@ Signed-By: /etc/apt/keyrings/docker.asc
     with open(sources_path, "w") as f:
         f.write(content)
 
-    run(["apt-get", "update"], errors, "apt-get update (repo oficial Docker)")
+    run_scoped_apt_update(errors, "apt-get update (repo oficial Docker)", [sources_path])
 
 
 def install_docker(errors):
