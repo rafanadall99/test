@@ -215,8 +215,10 @@ def print_error_banner(errors, exception_msg):
     print("- Errores:")
     if errors:
         for err in errors:
-            primera_linea = err.splitlines()[0]
-            print(f"  - {primera_linea}")
+            # Ahora imprimimos TODO el mensaje, no solo la primera línea
+            print("  ----------------------------------------------")
+            for line in err.splitlines():
+                print(f"  {line}")
     else:
         print(f"  - {exception_msg}")
     print("--------------------------------------------------")
