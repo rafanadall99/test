@@ -16,7 +16,7 @@ import sys
 SCRIPTS = [
     "instalarDockerCompose.py",
     "instalarWebmin.py",
-    "configurarBIND_DNS_Server.py",
+    "instalarBIND_DNS_Server.py",
 ]
 
 
