@@ -67,108 +67,69 @@ def check_distro():
 
 def setup_webmin_repo(errors):
     """
-    Configura el repo oficial de Webmin y su clave GPG
-    usando keyring en /usr/share/keyrings/webmin.gpg.
+    Configura el repo oficial de Webmin usando el script oficial
+    webmin-setup-repo.sh (nuevo repositorio con clave segura).
     """
-    # Actualiza índices antes de instalar dependencias
+
+    # 1) Elimina cualquier repo antiguo de Webmin que use la clave DSA insegura
+    old_list = "/etc/apt/sources.list.d/webmin.list"
+    if os.path.exists(old_list):
+        try:
+            os.remove(old_list)
+        except OSError as e:
+            errors.append(f"No se pudo eliminar {old_list}: {e}")
+            raise
+
+    main_sources = "/etc/apt/sources.list"
+    if os.path.exists(main_sources):
+        try:
+            with open(main_sources) as f:
+                lines = f.readlines()
+            new_lines = [ln for ln in lines if "webmin.com" not in ln]
+            if new_lines != lines:
+                with open(main_sources, "w") as f:
+                    f.writelines(new_lines)
+        except OSError as e:
+            errors.append(f"No se pudo limpiar {main_sources}: {e}")
+            raise
+
+    # 2) Actualiza índices una vez limpio de repos antiguos de Webmin
     run(["apt-get", "update"], errors, "apt-get update (pre-requisitos)")
 
-    # Dependencias necesarias para descargar la clave y usar el repo
+    # 3) Dependencias necesarias para descargar y ejecutar el script oficial
     run(
         [
             "apt-get",
             "install",
             "-y",
-            "wget",
             "curl",
             "ca-certificates",
-            "apt-transport-https",
-            "software-properties-common",
             "gnupg",
+            "software-properties-common",
+            "apt-transport-https",
+            "wget",
         ],
         errors,
         "Instalando dependencias para Webmin",
     )
 
-    def fetch_keyring():
-        """
-        Descarga la clave GPG de Webmin y la guarda en formato .gpg.
-        Intenta primero por HTTPS y, si falla (por temas de TLS/certificados),
-        reintenta por HTTP.
-        """
-        urls = [
-            "https://download.webmin.com/jcameron-key.asc",
-            "http://www.webmin.com/jcameron-key.asc",
-        ]
-        last_error = None
-        initial_error_count = len(errors)
-
-        for url in urls:
-            try:
-                run(
-                    [
-                        "bash",
-                        "-lc",
-                        (
-                            f"curl -fsSL {url} | gpg --dearmor "
-                            "| tee /usr/share/keyrings/webmin.gpg > /dev/null"
-                        ),
-                    ],
-                    errors,
-                    f"Descargando y registrando clave GPG de Webmin ({url})",
-                )
-                # Si uno de los intentos ha ido bien, limpiamos los errores
-                # que pudieran haberse añadido en intentos anteriores.
-                del errors[initial_error_count:]
-                return
-            except RuntimeError as exc:
-                last_error = exc
-
-        # Si llegamos aquí, todos los intentos han fallado.
-        del errors[initial_error_count:]
-        if last_error:
-            errors.append(str(last_error))
-            raise last_error
-
-    # Descarga/registro de la clave GPG
-    fetch_keyring()
-
-    # Archivo de lista de repos de Webmin
-    sources_path = "/etc/apt/sources.list.d/webmin.list"
-
-    def write_repo(url):
-        content = (
-            "deb [signed-by=/usr/share/keyrings/webmin.gpg] "
-            f"{url} sarge contrib\n"
-        )
-        with open(sources_path, "w") as f:
-            f.write(content)
-
-    # Habilita el repo probando primero por HTTPS y, si falla, por HTTP.
-    urls = [
-        "https://download.webmin.com/download/repository",
-        "http://download.webmin.com/download/repository",
-    ]
-    last_error = None
-    initial_error_count = len(errors)
-
-    for url in urls:
-        try:
-            write_repo(url)
-            run(
-                ["apt-get", "update"],
-                errors,
-                f"apt-get update (repo Webmin {url})",
-            )
-            del errors[initial_error_count:]
-            break
-        except RuntimeError as exc:
-            last_error = exc
-    else:
-        del errors[initial_error_count:]
-        if last_error:
-            errors.append(str(last_error))
-            raise last_error
+    # 4) Descarga y ejecuta el script oficial webmin-setup-repo.sh
+    #    --force = no pregunta "Setup Webmin releases repository? (y/N)"
+    run(
+        [
+            "bash",
+            "-lc",
+            (
+                "cd /tmp && "
+                "curl -fsSL -o webmin-setup-repo.sh "
+                "https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh && "
+                "chmod +x webmin-setup-repo.sh && "
+                "./webmin-setup-repo.sh --force --stable"
+            ),
+        ],
+        errors,
+        "Configurando repositorio oficial de Webmin (webmin-setup-repo.sh)",
+    )
 
 
 def install_webmin_and_bind(errors):
@@ -215,7 +176,6 @@ def print_error_banner(errors, exception_msg):
     print("- Errores:")
     if errors:
         for err in errors:
-            # Ahora imprimimos TODO el mensaje, no solo la primera línea
             print("  ----------------------------------------------")
             for line in err.splitlines():
                 print(f"  {line}")
